@@ -130,9 +130,25 @@
                 <option value="60">60 分钟</option>
               </select>
             </div>
+            <div class="form-group">
+              <label class="form-label">单次预约最长时长</label>
+              <select class="form-input" id="r-max">
+                <option value="60">1 小时</option>
+                <option value="90">1.5 小时</option>
+                <option value="120">2 小时</option>
+                <option value="150">2.5 小时</option>
+                <option value="180" selected>3 小时</option>
+                <option value="210">3.5 小时</option>
+                <option value="240">4 小时</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">每企业每天最多预约次数</label>
+              <input class="form-input" type="number" id="r-dcount" min="1" max="10">
+            </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label">同企业同时段限制</label>
-              <input class="form-input" type="number" id="r-limit" min="1" max="10">
+              <label class="form-label">每企业每天累计时长上限（小时）</label>
+              <input class="form-input" type="number" id="r-dhours" min="1" max="12" step="0.5">
             </div>
             <button class="btn btn-primary btn-block" style="margin-top: 20px;" onclick="saveRules()">保存规则</button>
           </div>

@@ -1,13 +1,11 @@
 /* ============================================
- * 会议室预约系统 · 数据层（CloudBase PostgreSQL 版）
- * 前端匿名直连 rdb() 读；写操作走云函数 mbapi（service_role）
- * 本地降级：无网络/无环境时退回 localStorage
+ * 会议室预约系统 · 数据层（Supabase Edge Function 版）
+ * 前端 CloudStudio 静态托管 + 后端 Edge Function 跨域调用
+ * 本地降级：无网络时退回 localStorage
  * ============================================================ */
 
-// ===== 云端配置 =====
-const CLOUDBASE_ENV = 'meeting-d0gv3pa8v2ae97a3e';
-const CLOUDBASE_ACCESS_KEY = 'eyJhbGciOiJSUzI1NiIsImtpZCI6ImE4OGM5NWVlLTI1MzgtNDBlNy04Mjk4LWU3YjkxZjk0MWU1OSJ9.eyJpc3MiOiJodHRwczovL21lZXRpbmctZDBndjNwYTh2MmFlOTdhM2UuYXAtc2hhbmdoYWkudGNiLWFwaS50ZW5jZW50Y2xvdWRhcGkuY29tIiwic3ViIjoiYW5vbiIsImF1ZCI6Im1lZXRpbmctZDBndjNwYTh2MmFlOTdhM2UiLCJleHAiOjQwOTI0NTM4MjAsImlhdCI6MTc4ODc3MDYyMCwibm9uY2UiOiJISExjektXVVFIU041aHZKQVVyRVdnIiwiYXRfaGFzaCI6IkhITGN6S1dVUUhTTjVodkpBVXJFV2ciLCJuYW1lIjoiQW5vbnltb3VzIiwic2NvcGUiOiJhbm9ueW1vdXMiLCJwcm9qZWN0X2lkIjoibWVldGluZy1kMGd2M3BhOHYyYWU5N2EzZSIsIm1ldGEiOnsicGxhdGZvcm0iOiJQdWJsaXNoYWJsZUtleSJ9LCJyb2xlIjoiYW5vbiIsImlzX2Fub255bW91cyI6dHJ1ZSwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiYW5vbnltb3VzIiwicHJvdmlkZXJzIjpbImFub255bW91cyJdfSwidXNlcl9tZXRhZGF0YSI6eyJuYW1lIjoiQW5vbnltb3VzIn0sInVzZXJfdHlwZSI6IiIsImNsaWVudF90eXBlIjoiY2xpZW50X3VzZXIiLCJpc19zeXN0ZW1fYWRtaW4iOmZhbHNlfQ.CC1I41A8_CDn9MW-j_pa0G3DtmGAfOzG4Fxc0BJI7kKPeOjX5iC0ln8dgWJvcWgS99mGDisSYWetzty6-cAVRzh2wiZ7mgmEQbd2h4m_YeaODG1IY2H29C1tYoq5Y3W7fk2RrKD50WCIHxrLovYHiZJEe0vfoNFQmRNMs6EbNbfa8TJus7Y_8tEnciqXkC7i88muI-709Ocy0LxaRHb4U-Ka8-HxoOWsFtu-kTnw7R8zK7HCYXsJDvIuyh9PiVHGISoG543fSbETQqHjfNLZtK2g9B-AJ2zHiZH_ND9BEVWjFep3XX7BvHBcr5XgcJiQB7CLzeAnik0m0Ku7k26-jw';
-const DEFAULT_PASS = 'appleipad2';
+const API_BASE = 'https://hnnjrqpefhbbwzdnewib.supabase.co/functions/v1/mbapi';
+const DEFAULT_PASS = 'CHANGE_ME_2026';
 
 // 本地降级用的存储 Key
 const K = {
@@ -17,7 +15,8 @@ const K = {
   ROOMS: 'mb_rooms',
   BLACKOUTS: 'mb_blackouts',
   RULES: 'mb_rules',
-  NOTIFY: 'mb_notify'
+  NOTIFY: 'mb_notify',
+  MY: 'mb_my_bookings_v1'   // 本机记住的预约号 + 手机号
 };
 
 // 8个图标预设
@@ -87,7 +86,7 @@ const Cloud = {
   app: null, db: null, mode: 'local', ready: false, errors: [],
   async init() {
     try {
-      const res = await fetch('/api/ping');
+      const res = await fetch(API_BASE + '/api/ping');
       if (!res.ok) throw new Error('ping ' + res.status);
       const j = await res.json();
       if (!j.ok) throw new Error('ping not ok');
@@ -107,7 +106,7 @@ const Cloud = {
       params.set('t', table);
       if (cols !== '*') params.set('c', cols);
       for (const k in where) params.set('w_' + k, where[k]);
-      const res = await fetch('/api/read?' + params.toString());
+      const res = await fetch(API_BASE + '/api/read?' + params.toString());
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const j = await res.json();
       if (!j.ok) throw new Error(j.error || 'read failed');
@@ -122,7 +121,7 @@ const Cloud = {
   async call(name, data) {
     if (this.mode !== 'cloud') return { ok: false, error: 'local mode' };
     try {
-      const res = await fetch('/api', {
+      const res = await fetch(API_BASE + '/api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -159,17 +158,38 @@ const Cloud = {
   }
 };
 
-/* ============== 动态加载 SDK ============== */
-function lazyLoadCloud() {
-  return new Promise(res => {
-    if (window.cloudbase) return res();
-    const s = document.createElement('script');
-    s.src = 'js/cloudbase.full.js';
-    s.onload = () => res();
-    s.onerror = () => res();
-    document.head.appendChild(s);
-  });
-}
+/* ============== 本机记忆：我的预约 ============== */
+const MyMemory = {
+  // 预约成功后保存一条；同 id 不重复
+  save(b) {
+    if (!b || !b.id || !b.phone) return;
+    try {
+      const list = JSON.parse(localStorage.getItem(K.MY) || '[]');
+      if (!list.find(x => x.id === b.id)) {
+        list.push({ id: b.id, phone: b.phone, name: b.name || '', company: b.company || '', savedAt: Date.now() });
+        localStorage.setItem(K.MY, JSON.stringify(list));
+      }
+    } catch (e) {}
+  },
+  list() {
+    try { return JSON.parse(localStorage.getItem(K.MY) || '[]'); } catch { return []; }
+  },
+  remove(id) {
+    try {
+      const list = JSON.parse(localStorage.getItem(K.MY) || '[]');
+      localStorage.setItem(K.MY, JSON.stringify(list.filter(x => x.id !== id)));
+    } catch (e) {}
+  },
+  clear() {
+    try { localStorage.removeItem(K.MY); } catch (e) {}
+  },
+  // 取最近一条绑定的手机号作为 my默认查询身份
+  lastPhone() {
+    const list = this.list();
+    if (!list.length) return '';
+    return list[list.length - 1].phone || '';
+  }
+};
 
 /* ============== 预约（公开只读槽位 + 提交走云函数）============== */
 const Bookings = {
@@ -189,9 +209,11 @@ const Bookings = {
     if (res && res.ok) {
       const rec = res.record || Object.assign({ id: res.id }, b);
       try { sessionStorage.setItem('mb_bk_' + rec.id, JSON.stringify(rec)); } catch (e) {}
+      // 顺手记一笔到本机"我的预约"
+      MyMemory.save(rec);
       return { ok: true, id: rec.id, record: rec };
     }
-    return { ok: false, error: (res && res.error) || 'create_failed', conflict: res && res.conflict };
+    return { ok: false, error: (res && res.error) || 'create_failed', conflict: res && res.conflict, msg: res && res.msg };
   },
   // success 页：从本次会话取刚创建的预约（云端不回传隐私字段给前端）
   get(id) {
@@ -212,6 +234,16 @@ const Bookings = {
     const res = await Cloud.admin('adminExportBookings', password, {});
     if (res && res.ok) return (res.data || []).map(normBooking);
     return [];
+  },
+  /* ----- 我的预约（公开：手机号查询 + 双重验证取消） ----- */
+  async myList(phone) {
+    const res = await Cloud.call('mbapi', { action: 'myBookings', data: { phone } });
+    if (res && res.ok) return (res.data || []).map(normBooking);
+    return [];
+  },
+  async myCancel(id, phone) {
+    const res = await Cloud.call('mbapi', { action: 'myCancelBooking', data: { id, phone } });
+    return res || { ok: false, error: 'no_response' };
   }
 };
 
@@ -272,7 +304,7 @@ const Blackouts = {
 };
 
 /* ============== 预约规则 ============== */
-const DEFAULT_RULES = { advanceDays: 7, workStart: '08:00', workEnd: '20:00', minDuration: 30, hourDuration: 60, perCompanyLimit: 1 };
+const DEFAULT_RULES = { advanceDays: 7, workStart: '08:00', workEnd: '20:00', minDuration: 30, hourDuration: 60, perCompanyLimit: 1, maxDuration: 180, perCompanyDailyCount: 2, perCompanyDailyMinutes: 360 };
 const Rules = {
   get() { return state.rules || DEFAULT_RULES; },
   async set(r, password) {
@@ -310,7 +342,7 @@ async function generateSlots(dateStr, duration, roomId) {
   const bookings = await Bookings.list({ roomId, date: dateStr, status: 'ok' });
   const blackouts = Blackouts.list({ roomId, date: dateStr });
 
-  for (let m = startMin; m + duration <= endMin; m += duration) {
+  for (let m = startMin; m + duration <= endMin; m += (rules.minDuration || 30)) {
     const s = fmtMin(m);
     const e = fmtMin(m + duration);
     const conflict = bookings.find(x => !(e <= x.start || s >= x.end));
@@ -430,7 +462,7 @@ async function bootstrap() {
 /* ============== 兼容层 ============== */
 const MB = {
   ICONS, COLORS, RULES: DEFAULT_RULES,
-  Store, Bookings, Rooms, Blackouts, Rules, Notify, Auth, Cloud,
+  Store, Bookings, Rooms, Blackouts, Rules, Notify, Auth, Cloud, MyMemory,
   generateSlots, getDateList, formatDate,
   toast, confirmModal, getQuery, $, $$,
   ready(fn) { if (_booted) fn(); else _waiters.push(fn); },
