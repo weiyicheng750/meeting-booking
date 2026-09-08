@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#5B7CFA">
+  <title>会议室预约 · 创新大厦</title>
+  <link rel="stylesheet" href="css/style.min.css">
+</head>
+<body>
+  <div class="app">
+    <div class="page">
+      <div class="hero">
+        <span class="hero-tag">中关村生命科学园</span>
+        <h1>会议室预约</h1>
+        <p>扫码即可预订创新大厦会议室，告别排队</p>
+      </div>
+
+      <div class="section-title">选择会议室</div>
+      <div id="room-list"><div class="empty"><p>加载中...</p></div></div>
+
+      <div class="section-title">使用须知</div>
+      <div class="card">
+        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.9;">
+          <div style="display: flex; gap: 8px; align-items: flex-start;">
+            <span class="badge badge-primary">①</span>
+            <span>每次预约最长 1 小时，可连续选择多个时段</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: flex-start; margin-top: 10px;">
+            <span class="badge badge-primary">②</span>
+            <span id="tip-advance">仅可预约未来 7 天内的工作时段（08:00-20:00）</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: flex-start; margin-top: 10px;">
+            <span class="badge badge-primary">③</span>
+            <span>同一企业同一时段仅可预订 1 间会议室</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: flex-start; margin-top: 10px;">
+            <span class="badge badge-primary">④</span>
+            <span>如需取消或调整，请联系园区运营</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="safe-bottom"></div>
+  </div>
+
+  <script src="js/common.js?vc=pg1"></script>
+  <script>
+    MB.ready(async function(){
+      const rules = MB.Rules.get();
+      $('#tip-advance').textContent = `仅可预约未来 ${rules.advanceDays} 天内的工作时段（${rules.workStart}-${rules.workEnd}）`;
+
+      const listEl = $('#room-list');
+      const rooms = MB.Rooms.list();
+      if (rooms.length === 0) {
+        listEl.innerHTML = '<div class="empty"><p>暂无可预约会议室，请联系园区运营</p></div>';
+        return;
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const todayBookings = await MB.Bookings.listSlots({ date: today, status: 'ok' });
+      listEl.innerHTML = rooms.map(room => {
+        const count = todayBookings.filter(b => b.roomId === room.id).length;
+        const available = count === 0;
+        const iconData = MB.ICONS.find(i => i.id === room.icon) || MB.ICONS[0];
+        const colorData = MB.COLORS.find(c => c.id === room.color) || MB.COLORS[0];
+        return `
+          <a class="card card-clickable" href="book.html?room=${room.id}">
+            <div class="card-link">
+              <div class="card-icon" style="background:${colorData.bg};color:${colorData.fg}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconData.svg}</svg>
+              </div>
+              <div class="card-body">
+                <div class="card-title">${room.name}</div>
+                <div class="card-meta">
+                  <span>📍 ${room.location || ''}</span>
+                  <span>👥 ${room.capacity}人</span>
+                  <span class="badge ${available ? 'badge-success' : 'badge-warning'}">${available ? '今日空闲' : '今日' + count + '场'}</span>
+                </div>
+              </div>
+              <div class="card-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+              </div>
+            </div>
+          </a>
+        `;
+      }).join('');
+    });
+  </script>
+</body>
+</html>

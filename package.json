@@ -1,0 +1,19 @@
+{
+  "name": "meeting-booking",
+  "version": "3.0.0",
+  "private": true,
+  "description": "会议室预约系统 - Node.js + Express + PostgreSQL，部署到 Render 免费版",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}

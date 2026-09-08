@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: meeting-booking
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/ping
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_PASS
+        sync: false
+      - key: NODE_ENV
+        value: production
