@@ -17,7 +17,7 @@
         </svg>
       </div>
       <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 6px;">预约成功</h1>
-      <p style="color: var(--text-muted); font-size: 14px;">请截图保存或截图核销码</p>
+      <p style="color: var(--text-muted); font-size: 14px;">请截图保存预约信息</p>
 
       <!-- 预约详情卡片 -->
       <div class="summary-card" style="text-align: left;">
@@ -55,15 +55,6 @@
         </div>
       </div>
 
-      <!-- 核销码 -->
-      <div class="qr-box">
-        <div class="qr-img" id="qr"></div>
-        <div class="qr-text">
-          <strong>核销码</strong>
-          <p>园区前台扫码核销，请妥善保管</p>
-        </div>
-      </div>
-
       <!-- 提示 -->
       <div class="card" style="background: var(--warning-soft); border: none; box-shadow: none; text-align: left;">
         <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: #92400E;">
@@ -94,7 +85,6 @@
   </div>
 
   <script src="js/common.js?vc=pg1"></script>
-  <script src="js/qrcode.min.js"></script>
   <script>
     MB.ready(function(){
     const id = MB.getQuery('id');
@@ -120,24 +110,6 @@
         document.getElementById('row-remark').style.display = 'flex';
         document.getElementById('s-remark').textContent = record.remark;
       }
-
-      // 生成核销二维码
-      const qrText = `会议室预约核销
-预约号:${record.id}
-会议室:${record.roomName}
-日期:${record.date}
-时间:${record.start}-${record.end}
-公司:${record.company}
-预约人:${record.name}`;
-
-      new QRCode(document.getElementById('qr'), {
-        text: qrText,
-        width: 84,
-        height: 84,
-        colorDark: '#111827',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M
-      });
 
       // 暴露给日历按钮
       window._record = record;
