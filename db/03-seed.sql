@@ -1,6 +1,6 @@
 -- 第 3 段：写入种子数据（默认会议室、规则、通知、管理员密码）
 
-INSERT INTO admin_auth (key, value) VALUES ('adminPass', 'appleipad2')
+INSERT INTO admin_auth (key, value) VALUES ('adminPass', 'CHANGE_ME_2026')
   ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO rooms (id, name, short_name, capacity, location, description, icon, color, sort, enabled) VALUES

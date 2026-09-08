@@ -1,0 +1,10 @@
+# Railway 部署配置（免 GitHub，本地 railway up 直传）
+[build]
+builder = "nixpacks"
+buildCommand = "npm install"
+
+[deploy]
+startCommand = "node server.js"
+healthcheckPath = "/api/ping"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"

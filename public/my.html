@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#5B7CFA">
+  <title>我的预约</title>
+  <link rel="stylesheet" href="css/style.min.css">
+  <style>
+    /* 我的预约页专属微调（不破坏现有样式） */
+    .my-header { padding: 0 16px 14px; }
+    .my-phone-card { padding: 16px; }
+    .my-phone-row { display: flex; gap: 10px; align-items: center; }
+    .my-phone-row .form-input { flex: 1; }
+    .my-phone-row .btn { white-space: nowrap; }
+    .my-extra { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+    .my-extra a { color: var(--primary); cursor: pointer; }
+    .my-extra .my-cleared { color: var(--success); }
+    .my-toggle-search { padding: 0 16px 6px; font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .my-toggle-search::before { content: "🔍"; }
+    .my-toggle-search .my-arrow { transition: transform .2s; }
+    .my-toggle-search.open .my-arrow { transform: rotate(180deg); }
+    .my-search-panel { padding: 0 16px 12px; display: none; }
+    .my-search-panel.open { display: block; }
+    .my-search-row { display: flex; gap: 8px; }
+    .my-search-row .form-input { flex: 1; }
+    .my-count-badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: rgba(255,255,255,.25); font-size: 11px; line-height: 18px; font-weight: 600; vertical-align: middle; }
+    .tab:not(.active) .my-count-badge { background: var(--surface-hover); color: var(--text-secondary); }
+    .booking-list { padding: 0 16px 24px; }
+    .booking-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 16px; margin-bottom: 12px; }
+    .booking-card.cancelled { opacity: .55; }
+    .booking-card.past { opacity: .8; }
+    .booking-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .booking-room { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .booking-status { font-size: 11px; padding: 3px 8px; border-radius: 999px; font-weight: 500; white-space: nowrap; }
+    .booking-status.upcoming { background: var(--success-soft, #ECFDF5); color: #047857; }
+    .booking-status.ongoing { background: #FEF3C7; color: #92400E; }
+    .booking-status.past { background: var(--surface-hover, #F3F4F6); color: var(--text-secondary); }
+    .booking-status.cancelled { background: #FEE2E2; color: #B91C1C; }
+    .booking-time { font-size: 14px; color: var(--text-primary); margin: 4px 0; }
+    .booking-time .booking-day { color: var(--text-secondary); margin-right: 6px; }
+    .booking-meta { font-size: 12px; color: var(--text-muted); margin: 6px 0; }
+    .booking-meta span { margin-right: 10px; }
+    .booking-remark { font-size: 13px; color: var(--text-secondary); background: var(--surface-hover, #F9FAFB); padding: 6px 10px; border-radius: var(--radius-sm); margin: 8px 0; }
+    .booking-id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+    .booking-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .booking-actions .btn { flex: 1; font-size: 13px; padding: 8px 12px; }
+    .cancel-verifier { background: var(--surface); padding: 16px; border-radius: var(--radius); margin: 12px 0; }
+    .cancel-verifier .form-group { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar back" onclick="if(history.length>1) history.back(); else location.href='index.html'">
+      <div class="topbar-title">我的预约</div>
+    </div>
+
+    <div class="page">
+      <!-- 手机号查询区 -->
+      <div class="my-header">
+        <div class="card my-phone-card">
+          <div class="my-phone-row">
+            <input class="form-input" id="phone" placeholder="请输入预约手机号" inputmode="numeric" maxlength="11">
+            <button class="btn btn-primary" id="btn-query">查询</button>
+          </div>
+          <div class="my-extra">
+            <span id="my-extra-tip">输入手机号查看您在该号码下所有预约</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 预约号补查 -->
+      <div class="my-toggle-search" id="toggle-search">
+        <span>用预约号补查 / 切换账号</span>
+        <span class="my-arrow">▾</span>
+      </div>
+      <div class="my-search-panel" id="search-panel">
+        <div class="my-search-row">
+          <input class="form-input" id="q-bkid" placeholder="预约号（如 BKXXX）">
+          <input class="form-input" id="q-phone4" placeholder="手机号后4位" inputmode="numeric" maxlength="4">
+          <button class="btn btn-primary btn-sm" id="btn-qbk">查询</button>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+          适用于帮同事查看预约号对应的预约
+        </div>
+      </div>
+
+      <!-- Tab 切换 -->
+      <div class="tabs" id="tabs">
+        <div class="tab active" data-tab="upcoming">待进行<span class="my-count-badge" id="cnt-upcoming">0</span></div>
+        <div class="tab" data-tab="past">已完成<span class="my-count-badge" id="cnt-past">0</span></div>
+        <div class="tab" data-tab="cancelled">已取消<span class="my-count-badge" id="cnt-cancelled">0</span></div>
+      </div>
+
+      <!-- 列表 -->
+      <div class="booking-list" id="list"></div>
+
+      <div style="text-align: center; padding: 20px; font-size: 12px; color: var(--text-muted);">
+        本机已记忆 <span id="my-memory-count">0</span> 条预约记录
+      </div>
+    </div>
+  </div>
+
+  <script src="js/common.js?vc=my1"></script>
+  <script src="js/my.js?v=my1"></script>
+</body>
+</html>

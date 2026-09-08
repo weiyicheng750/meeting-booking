@@ -22,10 +22,8 @@
       <div class="date-list" id="date-list"></div>
 
       <div class="section-title">② 选择时长</div>
-      <div class="seg-control" id="seg-control">
-        <div class="seg-item active" data-dur="30">30 分钟</div>
-        <div class="seg-item" data-dur="60">1 小时</div>
-      </div>
+      <div class="seg-control" id="seg-control"></div>
+      <div class="section-tip" id="tip-limit"></div>
 
       <div class="section-title">③ 选择时段</div>
       <div class="section-tip">灰色为已占用，黄色为禁约时段</div>
@@ -67,6 +65,10 @@
   <script>
     MB.ready(function(){
       const rules = MB.Rules.get();
+      const granularity = rules.minDuration || 30;
+      const maxDuration = rules.maxDuration || 180;
+      const dailyCount = rules.perCompanyDailyCount || 2;
+      const dailyMinutes = rules.perCompanyDailyMinutes || 360;
       const rooms = MB.Rooms.list();
       const roomId = MB.getQuery('room') || (rooms[0] && rooms[0].id);
       const room = MB.Rooms.get(roomId) || rooms[0];
@@ -74,8 +76,21 @@
         document.querySelector('.page').innerHTML = '<div class="empty"><p>暂无可预约会议室</p></div>';
         return;
       }
-      const state = { date: new Date().toISOString().slice(0, 10), duration: rules.minDuration, slot: null, slots: [] };
+      const state = { date: new Date().toISOString().slice(0, 10), duration: granularity, slot: null, slots: [] };
       $('#tip-advance').textContent = `仅可预约未来 ${rules.advanceDays} 天内的工作时段（${rules.workStart}-${rules.workEnd}）`;
+      $('#tip-limit').textContent = `同一企业每天最多预约 ${dailyCount} 次、累计不超过 ${dailyMinutes / 60} 小时`;
+
+      // 时长选项：按粒度递增到单次上限（如 30 分钟 → 3 小时）
+      function durLabel(d) {
+        if (d < 60) return d + ' 分钟';
+        const h = d / 60;
+        return (h % 1 === 0 ? String(h) : h.toFixed(1)) + ' 小时';
+      }
+      const durOptions = [];
+      for (let d = granularity; d <= maxDuration; d += granularity) durOptions.push(d);
+      $('#seg-control').innerHTML = durOptions.map((d, i) =>
+        `<div class="seg-item${i === 0 ? ' active' : ''}" data-dur="${d}">${durLabel(d)}</div>`
+      ).join('');
 
       const iconData = MB.ICONS.find(i => i.id === room.icon) || MB.ICONS[0];
       const colorData = MB.COLORS.find(c => c.id === room.color) || MB.COLORS[0];
@@ -97,6 +112,35 @@
         </div>
       `;
 
+      // 按日期缓存已拉到的占用/禁约（20s TTL 自动失效，避免管理员改数据后陈旧）
+      const CACHE_TTL_MS = 20000;
+      const dayCache = new Map();  // dateStr → { bookings, blackouts, ts }
+      function getDayData(dateStr) {
+        const hit = dayCache.get(dateStr);
+        if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return Promise.resolve(hit);
+        return MB.Bookings.list({ roomId: room.id, date: dateStr, status: 'ok' }).then(bookings => {
+          const blackouts = MB.Blackouts.list({ roomId: room.id, date: dateStr });
+          const data = { bookings, blackouts, ts: Date.now() };
+          dayCache.set(dateStr, data);
+          return data;
+        });
+      }
+      function fmtMin(m) {
+        return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+      }
+      // 纯本地计算 slots（不带网络）
+      function computeSlots(bookings, blackouts, startMin, endMin, dur) {
+        const slots = [];
+        for (let m = startMin; m + dur <= endMin; m += granularity) {
+          const s = fmtMin(m);
+          const e = fmtMin(m + dur);
+          const conflict = bookings.find(x => !(e <= x.start || s >= x.end));
+          const blocked = blackouts.find(x => !(e <= x.startTime || s >= x.endTime));
+          slots.push({ start: s, end: e, disabled: !!(conflict || blocked), reason: conflict ? '已预约' : (blocked ? '禁约' : '') });
+        }
+        return slots;
+      }
+
       function renderDates() {
         const dates = MB.getDateList();
         $('#date-list').innerHTML = dates.map(d => `
@@ -107,12 +151,23 @@
           </div>
         `).join('');
         $$('.date-item').forEach(el => {
-          el.onclick = () => { state.date = el.dataset.date; state.slot = null; renderDates(); renderSlots(); };
+          el.onclick = () => {
+            if (state.date === el.dataset.date) return;
+            state.date = el.dataset.date;
+            state.slot = null;
+            renderDates();
+            renderSlots();
+          };
         });
       }
 
       async function renderSlots() {
-        const slots = await MB.generateSlots(state.date, state.duration, room.id);
+        const r = MB.Rules.get();
+        const [sh, sm] = r.workStart.split(':').map(Number);
+        const [eh, em] = r.workEnd.split(':').map(Number);
+        const startMin = sh * 60 + sm, endMin = eh * 60 + em;
+        const data = await getDayData(state.date);
+        const slots = computeSlots(data.bookings, data.blackouts, startMin, endMin, state.duration);
         state.slots = slots;
         const grid = $('#slot-grid');
         if (slots.length === 0) {
@@ -128,17 +183,24 @@
           `;
         }).join('');
         $$('.slot-item:not(.disabled)').forEach(el => {
-          el.onclick = () => { state.slot = { start: el.dataset.start, end: el.dataset.end }; renderSlots(); };
+          el.onclick = () => {
+            // 关键：只切 active，不调 renderSlots、不发请求、不重渲
+            state.slot = { start: el.dataset.start, end: el.dataset.end };
+            $$('.slot-item').forEach(x => x.classList.remove('active'));
+            el.classList.add('active');
+          };
         });
       }
 
       $$('#seg-control .seg-item').forEach(el => {
         el.onclick = () => {
-          state.duration = parseInt(el.dataset.dur);
+          const newDur = parseInt(el.dataset.dur);
+          if (newDur === state.duration) return;  // 同粒度不重渲
+          state.duration = newDur;
           state.slot = null;
           $$('#seg-control .seg-item').forEach(x => x.classList.remove('active'));
           el.classList.add('active');
-          renderSlots();
+          renderSlots();  // 走 dayCache，本地算，不发网络
         };
       });
 
@@ -166,8 +228,8 @@
           if (result.error === 'conflict') {
             await MB.confirmModal({ title: '时段已被占用', message: `${result.conflict.company} 已预约该时段，请选择其他时段`, confirmText: '我知道了', cancelText: '关闭' });
             renderSlots();
-          } else if (result.error === 'company_conflict') {
-            await MB.confirmModal({ title: '同企业时段冲突', message: `贵公司在同时段已预约了 ${result.conflict.roomName}，请调整`, confirmText: '我知道了', cancelText: '关闭' });
+          } else if (result.error === 'company_daily_limit' || result.error === 'company_daily_minutes' || result.error === 'bad_duration') {
+            await MB.confirmModal({ title: '无法提交预约', message: result.msg || '不满足预约规则，请调整后再试', confirmText: '我知道了', cancelText: '关闭' });
           }
           return;
         }

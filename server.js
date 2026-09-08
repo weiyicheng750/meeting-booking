@@ -10,7 +10,7 @@
  *
  * 环境变量：
  *   DATABASE_URL   PostgreSQL 连接串（必填）
- *   ADMIN_PASS     后台密码（可选，默认 appleipad2）
+ *   ADMIN_PASS     后台密码（可选，默认 CHANGE_ME_2026）
  *   PORT           端口（Render 自动注入，本地默认 3000）
  * ============================================================ */
 
@@ -21,7 +21,7 @@ const cors = require('cors');
 const { Pool } = require('pg');
 
 const PORT = process.env.PORT || 3000;
-const DEFAULT_PASS = 'appleipad2';
+const DEFAULT_PASS = 'CHANGE_ME_2026';
 
 // SSL 自动识别：Supabase / 含 sslmode=require 时启用，其他默认不开
 const connStr = process.env.DATABASE_URL || '';

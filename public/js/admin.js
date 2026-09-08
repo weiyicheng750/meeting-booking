@@ -392,7 +392,18 @@ MB.ready(function () {
     $('#r-start').value = r.workStart;
     $('#r-end').value = r.workEnd;
     $('#r-min').value = r.minDuration;
-    $('#r-limit').value = r.perCompanyLimit;
+    // 单次最长时长（旧数据无此字段时默认 180 分钟）
+    const maxDuration = r.maxDuration || 180;
+    const selMax = $('#r-max');
+    if (![].slice.call(selMax.options).some(o => Number(o.value) === maxDuration)) {
+      const opt = document.createElement('option');
+      opt.value = String(maxDuration);
+      opt.textContent = (maxDuration / 60) + ' 小时';
+      selMax.appendChild(opt);
+    }
+    selMax.value = String(maxDuration);
+    $('#r-dcount').value = r.perCompanyDailyCount || 2;
+    $('#r-dhours').value = (r.perCompanyDailyMinutes || 360) / 60;
 
     const res = await MB.Cloud.admin('adminGetSettings', adminPass(), {});
     const s = (res && res.ok && res.data) ? res.data : {};
@@ -413,9 +424,13 @@ MB.ready(function () {
     const workStart = $('#r-start').value || '08:00';
     const workEnd = $('#r-end').value || '20:00';
     const minDuration = parseInt($('#r-min').value) || 30;
-    const perCompanyLimit = Math.max(1, parseInt($('#r-limit').value) || 1);
+    const maxDuration = parseInt($('#r-max').value) || 180;
+    const perCompanyDailyCount = Math.max(1, parseInt($('#r-dcount').value) || 2);
+    const perCompanyDailyMinutes = Math.max(30, Math.round(parseFloat($('#r-dhours').value || 6) * 60));
     if (workStart >= workEnd) { MB.toast('工作结束时间必须晚于开始'); return; }
-    await MB.Rules.set({ advanceDays, workStart, workEnd, minDuration, hourDuration: Math.max(60, minDuration), perCompanyLimit }, adminPass());
+    if (maxDuration < minDuration) { MB.toast('单次最长时长不能小于时段粒度'); return; }
+    if (maxDuration % minDuration !== 0) { MB.toast('单次最长时长须为时段粒度的整数倍'); return; }
+    await MB.Rules.set({ advanceDays, workStart, workEnd, minDuration, maxDuration, perCompanyDailyCount, perCompanyDailyMinutes, hourDuration: Math.max(60, minDuration), perCompanyLimit: perCompanyDailyCount }, adminPass());
     MB.toast('规则已保存');
   };
 
@@ -470,7 +485,7 @@ MB.ready(function () {
         lastSeenCount = cur.length;
         await Promise.all([renderStats(), renderList()]);
       } catch (e) {}
-    }, 30000);
+    }, 60000);  // 60 秒轮询（避开国内访问 Supabase 的 700ms 延迟）
   }
   function showNewBadge(n) {
     const b = $('#new-badge');

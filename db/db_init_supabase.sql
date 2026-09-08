@@ -73,7 +73,7 @@ CREATE OR REPLACE VIEW public_settings AS
   SELECT key, value FROM settings WHERE key = 'rules';
 
 -- ---------- 3. 种子数据 ----------
-INSERT INTO admin_auth (key, value) VALUES ('adminPass', 'appleipad2')
+INSERT INTO admin_auth (key, value) VALUES ('adminPass', 'CHANGE_ME_2026')
   ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO rooms (id, name, short_name, capacity, location, description, icon, color, sort, enabled) VALUES
@@ -82,7 +82,7 @@ INSERT INTO rooms (id, name, short_name, capacity, location, description, icon, 
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO settings (key, value) VALUES
-  ('rules', '{"advanceDays":7,"workStart":"08:00","workEnd":"20:00","minDuration":30,"hourDuration":60,"perCompanyLimit":1}'::jsonb)
+  ('rules', '{"advanceDays":7,"workStart":"08:00","workEnd":"20:00","minDuration":30,"hourDuration":60,"perCompanyLimit":2,"maxDuration":180,"perCompanyDailyCount":2,"perCompanyDailyMinutes":360}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO settings (key, value) VALUES

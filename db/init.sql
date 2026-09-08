@@ -78,7 +78,7 @@ CREATE OR REPLACE VIEW public_settings AS
 -- ============================================================
 
 -- 默认管理员密码（与后台默认密码一致）
-INSERT INTO admin_auth (key, value) VALUES ('adminPass', 'appleipad2')
+INSERT INTO admin_auth (key, value) VALUES ('adminPass', 'CHANGE_ME_2026')
   ON CONFLICT (key) DO NOTHING;
 
 -- 默认会议室
