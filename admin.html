@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#5B7CFA">
+  <title>管理后台 · 会议室预约</title>
+  <link rel="stylesheet" href="css/style.min.css">
+  <style>
+    @media (min-width: 768px) {
+      body { background: linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%); }
+      .app { max-width: 720px; box-shadow: var(--shadow-lg); background: var(--bg); }
+      .topbar { max-width: 720px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- 登录态 -->
+    <div id="login-page" class="login-page" style="min-height: 100vh;">
+      <div class="login-card">
+        <h2>🔐 管理后台</h2>
+        <p class="sub">请输入管理员密码</p>
+        <div class="form-group">
+          <input class="form-input" id="login-pass" type="password" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')doLogin()">
+          <div class="form-error" id="login-err"></div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="doLogin()">登录</button>
+      </div>
+    </div>
+
+    <!-- 管理面板 -->
+    <div id="admin-panel" style="display: none;">
+      <div class="topbar">
+        <div class="topbar-title">📊 会议室预约管理</div>
+        <div class="topbar-actions">
+          <span id="new-badge" style="display: none; background: var(--danger); color: #fff; border-radius: var(--radius-full); padding: 2px 8px; font-size: 12px; font-weight: 600; margin-right: 8px;">0</span>
+          <button class="btn btn-ghost btn-sm" onclick="logout()">退出</button>
+        </div>
+      </div>
+
+      <div class="page">
+        <!-- Tab 切换 -->
+        <div class="tabs">
+          <div class="tab active" data-tab="bookings">预约</div>
+          <div class="tab" data-tab="rooms">会议室</div>
+          <div class="tab" data-tab="blackouts">禁约</div>
+          <div class="tab" data-tab="settings">设置</div>
+        </div>
+
+        <!-- 预约 Tab -->
+        <div class="tab-pane active" id="pane-bookings">
+          <div class="stat-row">
+            <div class="stat-card"><div class="stat-num" id="stat-total">0</div><div class="stat-label">总预约</div></div>
+            <div class="stat-card"><div class="stat-num" id="stat-today">0</div><div class="stat-label">今日</div></div>
+            <div class="stat-card"><div class="stat-num" id="stat-month">0</div><div class="stat-label">本月</div></div>
+          </div>
+
+          <div class="card" style="padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 14px; font-weight: 600;">筛选</span>
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV()">📥 导出 CSV</button>
+            </div>
+            <div class="filter-bar" id="filter-room">
+              <div class="filter-chip active" data-room="all">全部</div>
+            </div>
+            <input type="date" class="form-input" id="filter-date" style="margin-top: 8px;">
+            <div class="filter-bar" id="filter-status" style="margin-top: 8px;">
+              <div class="filter-chip active" data-status="ok">有效</div>
+              <div class="filter-chip" data-status="cancelled">已取消</div>
+              <div class="filter-chip" data-status="all">全部</div>
+            </div>
+          </div>
+
+          <div class="section-title">预约记录</div>
+          <div id="booking-list"></div>
+        </div>
+
+        <!-- 会议室 Tab -->
+        <div class="tab-pane" id="pane-rooms">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-size: 14px; color: var(--text-muted);">共 <span id="room-count">0</span> 间</span>
+            <button class="btn btn-primary btn-sm" onclick="roomForm()">+ 新增会议室</button>
+          </div>
+          <div id="room-list-admin"></div>
+        </div>
+
+        <!-- 禁约 Tab -->
+        <div class="tab-pane" id="pane-blackouts">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-size: 14px; color: var(--text-muted);">共 <span id="bl-count">0</span> 条禁约</span>
+            <button class="btn btn-primary btn-sm" onclick="blackoutForm()">+ 新增禁约</button>
+          </div>
+          <div class="filter-bar" id="bl-filter-room">
+            <div class="filter-chip active" data-room="all">全部</div>
+          </div>
+          <div id="blackout-list" style="margin-top: 12px;"></div>
+        </div>
+
+        <!-- 设置 Tab -->
+        <div class="tab-pane" id="pane-settings">
+          <div class="section-title">数据源状态</div>
+          <div class="card" id="cloud-status" style="padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
+              <span id="cloud-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #9CA3AF;"></span>
+              <strong id="cloud-mode-text">检测中...</strong>
+            </div>
+            <div id="cloud-detail" style="font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.7;"></div>
+          </div>
+
+          <div class="section-title">预约规则</div>
+          <div class="card" style="padding: 20px;">
+            <div class="form-group">
+              <label class="form-label">可提前预约天数</label>
+              <input class="form-input" type="number" id="r-advance" min="1" max="30">
+            </div>
+            <div class="form-group">
+              <label class="form-label">工作开始时间</label>
+              <input class="form-input" type="time" id="r-start">
+            </div>
+            <div class="form-group">
+              <label class="form-label">工作结束时间</label>
+              <input class="form-input" type="time" id="r-end">
+            </div>
+            <div class="form-group">
+              <label class="form-label">时段粒度（分钟）</label>
+              <select class="form-input" id="r-min">
+                <option value="30">30 分钟</option>
+                <option value="60">60 分钟</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">同企业同时段限制</label>
+              <input class="form-input" type="number" id="r-limit" min="1" max="10">
+            </div>
+            <button class="btn btn-primary btn-block" style="margin-top: 20px;" onclick="saveRules()">保存规则</button>
+          </div>
+
+          <div class="section-title">通知设置</div>
+          <div class="card" style="padding: 20px;">
+            <div style="background: var(--warning-soft); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 12px; color: #92400E; margin-bottom: 16px;">
+              ⓘ 当前仅保存配置，不实际发送。需要接外部通知时，请联系开发。
+            </div>
+            <div class="form-group">
+              <label class="form-label">企业微信群机器人 Webhook</label>
+              <input class="form-input" id="n-webhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Server酱 SendKey（个人微信）</label>
+              <input class="form-input" id="n-sc" placeholder="SCTxxxxxx">
+            </div>
+            <div class="form-group">
+              <label class="form-label">提醒邮箱（QQ/网易 SMTP）</label>
+              <input class="form-input" id="n-email" placeholder="user@qq.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">提前提醒（分钟）</label>
+              <input class="form-input" type="number" id="n-remind" min="0" max="120">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="n-new" style="width: 18px; height: 18px;"> 新预约时通知
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
+                <input type="checkbox" id="n-cancel" style="width: 18px; height: 18px;"> 取消预约时通知
+              </label>
+            </div>
+            <button class="btn btn-primary btn-block" style="margin-top: 20px;" onclick="saveNotify()">保存通知设置</button>
+          </div>
+
+          <div class="section-title">管理员密码</div>
+          <div class="card" style="padding: 20px;">
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label">新密码</label>
+              <input class="form-input" id="new-pass" type="password" placeholder="留空则不修改">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">确认新密码</label>
+              <input class="form-input" id="new-pass2" type="password">
+            </div>
+            <button class="btn btn-ghost btn-block" style="margin-top: 20px;" onclick="changePass()">修改密码</button>
+          </div>
+
+          <div class="section-title">系统</div>
+          <div class="card" style="padding: 20px;">
+            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+              <div>数据存储：浏览器本地（localStorage）</div>
+              <div>轮询频率：30 秒</div>
+              <div>版本：v2.0</div>
+            </div>
+            <button class="btn btn-ghost btn-block" style="margin-top: 12px; color: var(--danger); border-color: var(--danger-soft);" onclick="clearAllData()">⚠️ 清空所有数据</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 会议室编辑弹窗 -->
+  <div class="modal-mask" id="room-modal">
+    <div class="modal" style="text-align: left; max-width: 420px;">
+      <h3 id="room-modal-title">新增会议室</h3>
+      <div style="max-height: 70vh; overflow-y: auto; padding-right: 4px;">
+        <div class="form-group">
+          <label class="form-label">完整名称<span class="req">*</span></label>
+          <input class="form-input" id="rm-name" placeholder="如：创新大厦·小会议室">
+        </div>
+        <div class="form-group">
+          <label class="form-label">简称</label>
+          <input class="form-input" id="rm-short" placeholder="如：小会议室">
+        </div>
+        <div class="form-group">
+          <label class="form-label">位置</label>
+          <input class="form-input" id="rm-loc" placeholder="如：创新大厦5层501">
+        </div>
+        <div class="form-group" style="display: flex; gap: 12px;">
+          <div style="flex: 1;">
+            <label class="form-label">容量（人）</label>
+            <input class="form-input" type="number" id="rm-cap" min="1" max="500" value="10">
+          </div>
+          <div style="flex: 1;">
+            <label class="form-label">排序</label>
+            <input class="form-input" type="number" id="rm-sort" value="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">描述</label>
+          <input class="form-input" id="rm-desc" placeholder="如：适合小组讨论、远程视频会议">
+        </div>
+        <div class="form-group">
+          <label class="form-label">图标</label>
+          <div id="rm-icons" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;"></div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">颜色</label>
+          <div id="rm-colors" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button class="btn btn-ghost" onclick="closeModal('room-modal')">取消</button>
+        <button class="btn btn-primary" onclick="saveRoom()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 禁约编辑弹窗 -->
+  <div class="modal-mask" id="bl-modal">
+    <div class="modal" style="text-align: left; max-width: 420px;">
+      <h3 id="bl-modal-title">新增禁约</h3>
+      <div style="max-height: 70vh; overflow-y: auto; padding-right: 4px;">
+        <div class="form-group">
+          <label class="form-label">会议室<span class="req">*</span></label>
+          <select class="form-input" id="bl-room"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">类型</label>
+          <select class="form-input" id="bl-type">
+            <option value="once">单次：指定日期</option>
+            <option value="range">区间：日期范围</option>
+            <option value="weekly">每周重复</option>
+          </select>
+        </div>
+        <div class="form-group" id="bl-once-fields">
+          <label class="form-label">日期</label>
+          <input class="form-input" type="date" id="bl-date">
+        </div>
+        <div class="form-group" id="bl-range-fields" style="display: none;">
+          <div style="display: flex; gap: 8px;">
+            <div style="flex: 1;">
+              <label class="form-label">开始</label>
+              <input class="form-input" type="date" id="bl-start">
+            </div>
+            <div style="flex: 1;">
+              <label class="form-label">结束</label>
+              <input class="form-input" type="date" id="bl-end">
+            </div>
+          </div>
+        </div>
+        <div class="form-group" id="bl-weekly-fields" style="display: none;">
+          <label class="form-label">星期（可多选）</label>
+          <div id="bl-weekdays" style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <label class="filter-chip" data-day="1"><input type="checkbox" value="1" style="display:none;">一</label>
+            <label class="filter-chip" data-day="2"><input type="checkbox" value="2" style="display:none;">二</label>
+            <label class="filter-chip" data-day="3"><input type="checkbox" value="3" style="display:none;">三</label>
+            <label class="filter-chip" data-day="4"><input type="checkbox" value="4" style="display:none;">四</label>
+            <label class="filter-chip" data-day="5"><input type="checkbox" value="5" style="display:none;">五</label>
+            <label class="filter-chip" data-day="6"><input type="checkbox" value="6" style="display:none;">六</label>
+            <label class="filter-chip" data-day="0"><input type="checkbox" value="0" style="display:none;">日</label>
+          </div>
+        </div>
+        <div class="form-group" style="display: flex; gap: 8px;">
+          <div style="flex: 1;">
+            <label class="form-label">开始时间</label>
+            <input class="form-input" type="time" id="bl-t-start" value="08:00">
+          </div>
+          <div style="flex: 1;">
+            <label class="form-label">结束时间</label>
+            <input class="form-input" type="time" id="bl-t-end" value="20:00">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">原因（选填）</label>
+          <input class="form-input" id="bl-reason" placeholder="如：设备维护、全天活动">
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button class="btn btn-ghost" onclick="closeModal('bl-modal')">取消</button>
+        <button class="btn btn-primary" onclick="saveBlackout()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/common.js?vc=pg1"></script>
+  <script src="js/admin.js?vc=pg1"></script>
+</body>
+</html>
