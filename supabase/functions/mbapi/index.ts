@@ -375,9 +375,9 @@ Deno.serve(async (req: Request) => {
     const result = await dispatch(body.action, body.password, body.data);
     return json(result);
   }
-  // 前端托管在 CloudStudio；Edge Function 提供永久固定入口，302 跳转。
+  // 前端托管在 GitHub Pages（永久在线，无休眠无回收）；Edge Function 提供永久固定入口，302 跳转。
   // 二维码指向本函数地址，前端托管地址变更时只需改这里重新 deploy。
-  const FRONTEND_BASE = "https://3000-97aaa2e791224b6c8f8802d8b8b28556.e2b.bj2.sandbox.cloudstudio.club";
+  const FRONTEND_BASE = "https://weiyicheng750.github.io/meeting-booking";
   if (!rem.startsWith("/api")) {
     return new Response(null, {
       status: 302,
