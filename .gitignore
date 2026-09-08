@@ -5,3 +5,5 @@ cloudbaserc.json
 cloudfunctions/
 debug/
 *.log
+# 构建生成物
+supabase/functions/mbapi/static_content.ts
