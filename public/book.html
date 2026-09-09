@@ -61,7 +61,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?vc=pg1"></script>
+  <script src="js/common.js?vc=pg2"></script>
   <script>
     MB.ready(function(){
       const rules = MB.Rules.get();
@@ -112,21 +112,36 @@
         </div>
       `;
 
-      // 按日期缓存已拉到的占用/禁约（TTL 自动失效，避免管理员改数据后陈旧）
+      // 按日期缓存已拉到的占用/禁约（内存热缓存 60s + localStorage 持久缓存秒开）
       const CACHE_TTL_MS = 60000; // 1 分钟：覆盖一次预约流程，又不至于太陈旧
       const dayCache = new Map();   // dateStr → { bookings, blackouts, ts }
       const inflight = new Map();   // dateStr → Promise（去重，避免首屏与预热重复发请求）
+      function dayKey(dateStr) { return 'mb_day_' + room.id + '_' + dateStr; }
+      function fetchFresh(dateStr) {
+        return MB.Bookings.list({ roomId: room.id, date: dateStr, status: 'ok' }).then(bookings => {
+          const blackouts = MB.Blackouts.list({ roomId: room.id, date: dateStr });
+          const data = { bookings, blackouts, ts: Date.now() };
+          dayCache.set(dateStr, data);
+          Store.set(dayKey(dateStr), data);
+          return data;
+        });
+      }
       function getDayData(dateStr) {
         const hit = dayCache.get(dateStr);
         if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return Promise.resolve(hit);
         if (inflight.has(dateStr)) return inflight.get(dateStr);
-        const p = MB.Bookings.list({ roomId: room.id, date: dateStr, status: 'ok' }).then(bookings => {
-          const blackouts = MB.Blackouts.list({ roomId: room.id, date: dateStr });
-          const data = { bookings, blackouts, ts: Date.now() };
-          dayCache.set(dateStr, data);
-          inflight.delete(dateStr);
-          return data;
-        }).catch(err => { inflight.delete(dateStr); throw err; });
+        // 本地持久缓存：即便略旧也先秒开，后台静默刷新后若仍看这天则重渲
+        const localRaw = Store.get(dayKey(dateStr), null);
+        if (localRaw) {
+          dayCache.set(dateStr, { ...localRaw, ts: Date.now() });
+          const p = Promise.resolve(localRaw);
+          inflight.set(dateStr, p);
+          fetchFresh(dateStr).then(fresh => {
+            if (state.date === dateStr) renderSlots();
+          }).catch(() => {});
+          return p;
+        }
+        const p = fetchFresh(dateStr).catch(err => { inflight.delete(dateStr); throw err; });
         inflight.set(dateStr, p);
         return p;
       }

@@ -148,9 +148,12 @@ const Cloud = {
   async loadAll() {
     if (this.mode !== 'cloud') return false;
     this.errors = [];
-    await this.loadRooms();
-    await this.loadBlackouts();
-    await this.loadRules();
+    // 并行拉取，避免串行叠加延迟（每个请求到海外节点约 0.8s，并行后整体≈1次）
+    await Promise.all([
+      this.loadRooms(),
+      this.loadBlackouts(),
+      this.loadRules(),
+    ]);
     Store.set(K.ROOMS, state.rooms);
     Store.set(K.BLACKOUTS, state.blackouts);
     if (this.errors.length) { console.warn('[Cloud] 部分加载异常', this.errors); return false; }
