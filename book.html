@@ -112,18 +112,27 @@
         </div>
       `;
 
-      // 按日期缓存已拉到的占用/禁约（20s TTL 自动失效，避免管理员改数据后陈旧）
-      const CACHE_TTL_MS = 20000;
-      const dayCache = new Map();  // dateStr → { bookings, blackouts, ts }
+      // 按日期缓存已拉到的占用/禁约（TTL 自动失效，避免管理员改数据后陈旧）
+      const CACHE_TTL_MS = 60000; // 1 分钟：覆盖一次预约流程，又不至于太陈旧
+      const dayCache = new Map();   // dateStr → { bookings, blackouts, ts }
+      const inflight = new Map();   // dateStr → Promise（去重，避免首屏与预热重复发请求）
       function getDayData(dateStr) {
         const hit = dayCache.get(dateStr);
         if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return Promise.resolve(hit);
-        return MB.Bookings.list({ roomId: room.id, date: dateStr, status: 'ok' }).then(bookings => {
+        if (inflight.has(dateStr)) return inflight.get(dateStr);
+        const p = MB.Bookings.list({ roomId: room.id, date: dateStr, status: 'ok' }).then(bookings => {
           const blackouts = MB.Blackouts.list({ roomId: room.id, date: dateStr });
           const data = { bookings, blackouts, ts: Date.now() };
           dayCache.set(dateStr, data);
+          inflight.delete(dateStr);
           return data;
-        });
+        }).catch(err => { inflight.delete(dateStr); throw err; });
+        inflight.set(dateStr, p);
+        return p;
+      }
+      // 进页面即并行预热未来所有可选日期 → 之后任意切日期纯本地、零网络延迟
+      function prefetchAllDays() {
+        MB.getDateList().forEach(d => { getDayData(d.date).catch(() => {}); });
       }
       function fmtMin(m) {
         return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
@@ -236,6 +245,7 @@
         location.href = `success.html?id=${result.id}`;
       };
 
+      prefetchAllDays();   // 提前并行拉取未来日期占用数据，切日期零延迟
       renderDates(); renderSlots();
     });
   </script>
