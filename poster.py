@@ -52,11 +52,17 @@ tx, ty = (W - tw) / 2, 220
 d.text((tx + 8, ty + 10), t, font=f_title, fill=(0, 0, 0))
 d.text((tx, ty), t, font=f_title, fill=WHITE)
 
-# 英文装饰小字
-f_en = font(54)
+# 英文装饰：宽度对齐中文主标题「会议室预约」（视觉一致、约一半字号）
 t_en = "Meeting Room Booking"
-tw_en = d.textlength(t_en, font=f_en)
-d.text(((W - tw_en) / 2, 570), t_en, font=f_en, fill=(220, 230, 255))
+cn_w = d.textlength("会议室预约", font=f_title)
+en_sz = 200
+while en_sz > 20:
+    fe = font(en_sz)
+    if d.textlength(t_en, font=fe) <= cn_w:
+        break
+    en_sz -= 2
+en_y = 560 + max(0, (300 - en_sz)) // 2
+d.text(((W - d.textlength(t_en, font=fe)) / 2, en_y), t_en, font=fe, fill=(220, 230, 255))
 
 # ---------- 中央白卡片 ----------
 CARD_W, CARD_H = 1800, 2250
@@ -111,10 +117,11 @@ t2 = "中关村生命科学园 · 创新大厦"
 tw2 = d.textlength(t2, font=f_subtitle)
 d.text(((W - tw2) / 2, y1 + 155), t2, font=f_subtitle, fill=(90, 96, 125))
 
-f_hint = font(56)
-t3 = "支持查看「我的预约」· 自助取消"
-tw3 = d.textlength(t3, font=f_hint)
-d.text(((W - tw3) / 2, y1 + 285), t3, font=f_hint, fill=SUB)
+# 高亮提示：请拍照留存（放大 + 删除上一行后上移居中）
+f_keep = font(86, True)
+t_keep = "请拍照留存 · 方便后续预约"
+tw_keep = d.textlength(t_keep, font=f_keep)
+d.text(((W - tw_keep) / 2, y1 + 300), t_keep, font=f_keep, fill=C1)
 
 # ---------- 底部 ----------
 f_ft = font(50, True)
