@@ -98,32 +98,36 @@ const Cloud = {
     this.ready = true;
   },
   // 只读结果本地缓存（stale-while-revalidate）：命中即秒回，后台静默刷新
-  _READ_TTL: 5 * 60 * 1000,
+  // TTL 60 秒：缩短"缓存了错误空数据"时的恢复时间
+  _READ_TTL: 60 * 1000,
   _readKey(table, cols, where) { return 'mb_r_' + table + '|' + (cols || '*') + '|' + JSON.stringify(where || {}); },
   _readCacheGet(k) {
     try { const s = localStorage.getItem(k); if (!s) return null; const o = JSON.parse(s); if (Date.now() - o.t > this._READ_TTL) return null; return o.v; }
     catch (e) { return null; }
   },
-  _readCacheSet(k, v) { try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), v })); } catch (e) {} },
-  async _readFetch(table, cols, where) {
-    try {
-      const params = new URLSearchParams();
-      params.set('t', table);
-      if (cols !== '*') params.set('c', cols);
-      for (const k in where) params.set('w_' + k, where[k]);
-      const res = await fetch(API_BASE + '/api/read?' + params.toString());
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const j = await res.json();
-      if (!j.ok) throw new Error(j.error || 'read failed');
-      return j.data || [];
-    } catch (e) {
-      this.errors.push(table + '：' + (e.message || e));
-      console.warn('[Cloud] 读取失败', table, e);
-      return [];
+  _readCacheSet(k, v) {
+    // 不缓存空数组：空可能是接口错误被吞后返回的状态，缓存会导致长时间显示"无可约"
+    if (Array.isArray(v) && v.length === 0) {
+      try { localStorage.removeItem(k); } catch (e) {}
+      return;
     }
+    try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), v })); } catch (e) {}
+  },
+  async _readFetch(table, cols, where) {
+    const params = new URLSearchParams();
+    params.set('t', table);
+    if (cols !== '*') params.set('c', cols);
+    for (const k in where) params.set('w_' + k, where[k]);
+    const res = await fetch(API_BASE + '/api/read?' + params.toString());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'read failed');
+    return j.data || [];
   },
   _readRefresh(k, table, cols, where) {
-    this._readFetch(table, cols, where).then(d => { try { this._readCacheSet(k, d); } catch (e) {} }).catch(() => {});
+    this._readFetch(table, cols, where)
+      .then(d => { try { this._readCacheSet(k, d); } catch (e) {} })
+      .catch(err => { console.warn('[Cloud] 后台刷新失败', table, err); });
   },
   // 匿名只读：会议室 / 禁约 / 预约槽位视图 / 公开设置
   async rdbSelect(table, cols, where) {
@@ -136,9 +140,15 @@ const Cloud = {
       this._readRefresh(key, table, cols, where);
       return cached;
     }
-    const data = await this._readFetch(table, cols, where);
-    this._readCacheSet(key, data);
-    return data;
+    try {
+      const data = await this._readFetch(table, cols, where);
+      this._readCacheSet(key, data);  // 空数组会被 _readCacheSet 自动剔除
+      return data;
+    } catch (e) {
+      this.errors.push(table + '：' + (e.message || e));
+      console.warn('[Cloud] 读取失败', table, e);
+      return [];
+    }
   },
   // 云函数调用
   async call(name, data) {
