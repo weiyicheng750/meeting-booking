@@ -59,7 +59,7 @@
     <div class="safe-bottom"></div>
   </div>
 
-  <script src="js/common.js?vc=pg1"></script>
+  <script src="js/common.js?vc=pg2"></script>
   <script>
       MB.ready(async function(){
       const listEl = $('#room-list');
@@ -76,7 +76,7 @@
         const iconData = MB.ICONS.find(i => i.id === room.icon) || MB.ICONS[0];
         const colorData = MB.COLORS.find(c => c.id === room.color) || MB.COLORS[0];
         return `
-          <a class="card card-clickable" href="book.html?room=${room.id}">
+          <a class="card card-clickable" href="book.html?v=2&room=${room.id}">
             <div class="card-link">
               <div class="card-icon" style="background:${colorData.bg};color:${colorData.fg}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconData.svg}</svg>
