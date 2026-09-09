@@ -61,10 +61,7 @@
 
   <script src="js/common.js?vc=pg1"></script>
   <script>
-    MB.ready(async function(){
-      const rules = MB.Rules.get();
-      $('#tip-advance').textContent = `仅可预约未来 ${rules.advanceDays} 天内的工作时段（${rules.workStart}-${rules.workEnd}）`;
-
+      MB.ready(async function(){
       const listEl = $('#room-list');
       const rooms = MB.Rooms.list();
       if (rooms.length === 0) {
