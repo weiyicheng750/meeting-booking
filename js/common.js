@@ -97,10 +97,15 @@ const Cloud = {
     }
     this.ready = true;
   },
-  // 匿名只读：会议室 / 禁约 / 预约槽位视图 / 公开设置
-  async rdbSelect(table, cols, where) {
-    cols = cols || '*'; where = where || {};
-    if (this.mode !== 'cloud') return [];
+  // 只读结果本地缓存（stale-while-revalidate）：命中即秒回，后台静默刷新
+  _READ_TTL: 5 * 60 * 1000,
+  _readKey(table, cols, where) { return 'mb_r_' + table + '|' + (cols || '*') + '|' + JSON.stringify(where || {}); },
+  _readCacheGet(k) {
+    try { const s = localStorage.getItem(k); if (!s) return null; const o = JSON.parse(s); if (Date.now() - o.t > this._READ_TTL) return null; return o.v; }
+    catch (e) { return null; }
+  },
+  _readCacheSet(k, v) { try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), v })); } catch (e) {} },
+  async _readFetch(table, cols, where) {
     try {
       const params = new URLSearchParams();
       params.set('t', table);
@@ -116,6 +121,24 @@ const Cloud = {
       console.warn('[Cloud] 读取失败', table, e);
       return [];
     }
+  },
+  _readRefresh(k, table, cols, where) {
+    this._readFetch(table, cols, where).then(d => { try { this._readCacheSet(k, d); } catch (e) {} }).catch(() => {});
+  },
+  // 匿名只读：会议室 / 禁约 / 预约槽位视图 / 公开设置
+  async rdbSelect(table, cols, where) {
+    cols = cols || '*'; where = where || {};
+    if (this.mode !== 'cloud') return [];
+    const key = this._readKey(table, cols, where);
+    const cached = this._readCacheGet(key);
+    if (cached !== null) {
+      // 命中缓存：立即返回，后台静默刷新缓存（下次更准，不影响本次渲染）
+      this._readRefresh(key, table, cols, where);
+      return cached;
+    }
+    const data = await this._readFetch(table, cols, where);
+    this._readCacheSet(key, data);
+    return data;
   },
   // 云函数调用
   async call(name, data) {
