@@ -70,10 +70,6 @@
 
       <!-- 操作按钮 -->
       <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 24px;">
-        <button class="btn btn-primary btn-block" onclick="addToCalendar()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          加入日历提醒
-        </button>
         <button class="btn btn-ghost btn-block" onclick="location.href='my.html'">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           查看我的所有预约
@@ -85,7 +81,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?vc=pg4"></script>
+  <script src="js/common.js?vc=pg5"></script>
   <script>
     MB.ready(function(){
     const id = MB.getQuery('id');
@@ -111,48 +107,8 @@
         document.getElementById('row-remark').style.display = 'flex';
         document.getElementById('s-remark').textContent = record.remark;
       }
-
-      // 暴露给日历按钮
-      window._record = record;
     }
     });
-
-    function addToCalendar() {
-      const r = window._record;
-      if (!r) return;
-      // 生成 ICS 文件
-      const pad = n => String(n).padStart(2, '0');
-      const startDate = r.date.replace(/-/g, '');
-      const [sh, sm] = r.start.split(':');
-      const [eh, em] = r.end.split(':');
-      const start = `${startDate}T${pad(sh-0)}${pad(sm-0)}00`;
-      const end = `${startDate}T${pad(eh-0)}${pad(em-0)}00`;
-
-      const ics = [
-        'BEGIN:VCALENDAR',
-        'VERSION:2.0',
-        'PRODID:-//Meeting Booking//CN',
-        'BEGIN:VEVENT',
-        `UID:${r.id}@meeting-booking`,
-        `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
-        `DTSTART:${start}`,
-        `DTEND:${end}`,
-        `SUMMARY:${r.roomName} - ${r.remark || '会议室预约'}`,
-        `DESCRIPTION:公司：${r.company}\\n预约人：${r.name}\\n电话：${r.phone}\\n预约号：${r.id}`,
-        `LOCATION:中关村生命科学园·创新大厦`,
-        'END:VEVENT',
-        'END:VCALENDAR'
-      ].join('\r\n');
-
-      const blob = new Blob([ics], { type: 'text/calendar' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${r.id}.ics`;
-      a.click();
-      URL.revokeObjectURL(url);
-      MB.toast('日历文件已下载');
-    }
   </script>
 </body>
 </html>
