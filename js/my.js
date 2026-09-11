@@ -92,7 +92,6 @@ MB.ready(async function () {
           ${b.remark ? `<div class="booking-remark">📌 ${escapeHtml(b.remark)}</div>` : ''}
           <div class="booking-id">预约号 ${b.id}</div>
           <div class="booking-actions">
-            <button class="btn btn-ghost btn-sm" onclick="addToCal('${b.id}','${b.date}','${b.start}','${b.end}','${escapeAttr(b.roomName || '')}','${escapeAttr(b.remark || '')}')">📅 加入日历</button>
             ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="cancelFlow('${b.id}','${escapeAttr(b.company || '')}')">✕ 取消预约</button>` : ''}
           </div>
         </div>
@@ -165,31 +164,6 @@ MB.ready(async function () {
       })[r && r.error] || '取消失败，请稍后再试';
       MB.toast(msg, 2400);
     }
-  };
-
-  /* ============== 加入日历（嵌入现有记录） */
-  window.addToCal = function (id, date, start, end, roomName, remark) {
-    const pad = n => String(n).padStart(2, '0');
-    const sd = date.replace(/-/g, '');
-    const [sh, sm] = start.split(':');
-    const [eh, em] = end.split(':');
-    const ics = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Meeting Booking//CN',
-      'BEGIN:VEVENT',
-      `UID:${id}@meeting-booking`,
-      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
-      `DTSTART:${sd}T${pad(+sh)}${pad(+sm)}00`,
-      `DTEND:${sd}T${pad(+eh)}${pad(+em)}00`,
-      `SUMMARY:${roomName || '会议室预约'} - ${remark || ''}`,
-      `LOCATION:中关村生命科学园·创新大厦`,
-      'END:VEVENT', 'END:VCALENDAR'
-    ].join('\r\n');
-    const blob = new Blob([ics], { type: 'text/calendar' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${id}.ics`; a.click();
-    URL.revokeObjectURL(url);
-    MB.toast('日历文件已下载');
   };
 
   /* ============== 事件绑定 ============== */
